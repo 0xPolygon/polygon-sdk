@@ -306,7 +306,8 @@ func TestEth_Block_GetLogs(t *testing.T) {
 }
 
 var (
-	addr0 = types.Address{0x1}
+	addr0                = types.Address{0x1}
+	uninitializedAddress = types.Address{0x99}
 )
 
 func TestEth_State_GetBalance(t *testing.T) {
@@ -355,9 +356,18 @@ func TestEth_State_GetCode(t *testing.T) {
 	acct0.Code(code0)
 
 	dispatcher := newTestDispatcher(hclog.NewNullLogger(), store)
-	code, err := dispatcher.endpoints.Eth.GetCode(acct0.address, LatestBlockNumber)
-	assert.NoError(t, err)
-	assert.Equal(t, code, argBytesPtr(code0))
+
+	t.Run("Initialized address", func(t *testing.T) {
+		code, err := dispatcher.endpoints.Eth.GetCode(acct0.address, LatestBlockNumber)
+		assert.NoError(t, err)
+		assert.Equal(t, code, argBytesPtr(code0))
+	})
+
+	t.Run("Uninitialized address", func(t *testing.T) {
+		code, err := dispatcher.endpoints.Eth.GetCode(uninitializedAddress, LatestBlockNumber)
+		assert.NoError(t, err)
+		assert.Equal(t, code, "0x")
+	})
 }
 
 func TestEth_State_GetStorageAt(t *testing.T) {

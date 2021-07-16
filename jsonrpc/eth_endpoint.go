@@ -462,7 +462,7 @@ func (e *Eth) GetCode(address types.Address, number BlockNumber) (interface{}, e
 
 	acc, err := e.d.store.GetAccount(header.StateRoot, address)
 	if err != nil {
-		return nil, err
+		return "0x", nil
 	}
 
 	emptySlice := []byte{}
