@@ -29,7 +29,7 @@ func TestPoS_Stake(t *testing.T) {
 
 	numGenesisValidators := IBFTMinNodes
 	ibftManager := framework.NewIBFTServersManager(t, numGenesisValidators, IBFTDirPrefix, func(i int, config *framework.TestServerConfig) {
-		config.Premine(stakerAddr, framework.EthToWei(10))
+		config.PremineWithStake(stakerAddr, framework.EthToWei(10), framework.EthToWei(10))
 		config.PremineValidatorBalance(big.NewInt(0), framework.EthToWei(10))
 		config.SetSeal(true)
 	})

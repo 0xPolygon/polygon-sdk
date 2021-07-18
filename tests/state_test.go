@@ -82,11 +82,6 @@ func RunSpecificTest(file string, t *testing.T, c stateCase, name, fork string, 
 }
 
 func TestState(t *testing.T) {
-	// The TestState is skipped for now, because the current
-	// IBFT PoS implementation modifies the Account state object,
-	// which in turn causes the Ethereum tests to fail (because of root hash mismatch)
-	t.Skip()
-
 	long := []string{
 		"static_Call50000",
 		"static_Return50000",

@@ -27,6 +27,13 @@ var (
 	UnstakingAddress = "1002"
 )
 
+// IsSystemEvent checks if the transaction is targeting a system handler
+func IsSystemEvent(toAddress *types.Address) bool {
+	return toAddress != nil && (
+		*(toAddress) == types.StringToAddress(StakingAddress) ||
+			(*toAddress) == types.StringToAddress(UnstakingAddress))
+}
+
 // setupHandlers defines which addresses are assigned to which system contract handlers
 func (s *System) setupHandlers() {
 	s.registerHandler(StakingAddress, &stakingHandler{s})

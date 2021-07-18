@@ -1,5 +1,7 @@
 package system
 
+import "github.com/0xPolygon/minimal/staking"
+
 // stakingHandler implements the staking logic for the System runtime
 type stakingHandler struct {
 	s *System
@@ -19,7 +21,11 @@ func (sh *stakingHandler) run(state *systemState) ([]byte, error) {
 	staker := state.contract.Caller
 
 	// Increase the account's staked balance
-	state.host.AddStakedBalance(staker, potentialStake)
+	staking.GetStakingHub().AddPendingEvent(staking.PendingEvent{
+		Address:   staker,
+		Value:     potentialStake,
+		EventType: staking.StakingEvent,
+	})
 
 	state.host.EmitStakedEvent(staker, potentialStake)
 

@@ -141,11 +141,10 @@ func (t *Trie) Commit(objs []*state.Object) (state.Snapshot, []byte) {
 			tt.Delete(hashit(obj.Address.Bytes()))
 		} else {
 			account := state.Account{
-				Balance:       obj.Balance,
-				StakedBalance: obj.StakedBalance,
-				Nonce:         obj.Nonce,
-				CodeHash:      obj.CodeHash.Bytes(),
-				Root:          obj.Root, // old root
+				Balance:  obj.Balance,
+				Nonce:    obj.Nonce,
+				CodeHash: obj.CodeHash.Bytes(),
+				Root:     obj.Root, // old root
 			}
 
 			if len(obj.Storage) != 0 {

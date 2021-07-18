@@ -151,8 +151,8 @@ func TestSystem_StakeAmount(t *testing.T) {
 
 			receipt, err := srv.SendRawTx(ctx, preparedTxn, addressKeyPairs[indx].privateKey)
 
-			assert.NoError(t, err)
-			assert.NotNil(t, receipt)
+			assert.NoErrorf(t, err, "Unable to send raw tx")
+			assert.NotNilf(t, receipt, "Receipt is nil")
 
 			if testCase.shouldSucceed {
 				fee = new(big.Int).Mul(

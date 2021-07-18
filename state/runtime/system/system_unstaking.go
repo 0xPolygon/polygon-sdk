@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/0xPolygon/minimal/staking"
 	"github.com/0xPolygon/minimal/types"
 )
 
@@ -39,16 +40,19 @@ func (uh *unstakingHandler) run(state *systemState) ([]byte, error) {
 		return nil, errors.New("Invalid unstake request")
 	}
 
-	// Decrease the staked amount from the account's staked balance
-	state.host.SubStakedBalance(staker, stakedBalance)
-
 	// Decrease the staked balance on the staking address
 	state.host.SubBalance(stakingAddress, stakedBalance)
 
 	// Increase the account's actual balance
 	state.host.AddBalance(staker, stakedBalance)
 
-	// TODO Remove the staker from the validator set after this point + checks
+	// Decrease the staked amount from the account's staked balance
+	staking.GetStakingHub().AddPendingEvent(staking.PendingEvent{
+		Address:   staker,
+		Value:     big.NewInt(0),
+		EventType: staking.UnstakingEvent,
+	})
+
 	state.host.EmitUnstakedEvent(staker, stakedBalance)
 
 	return nil, nil

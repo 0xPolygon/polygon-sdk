@@ -119,20 +119,20 @@ func (e *Eth) GetTransactionReceipt(hash types.Hash) (interface{}, error) {
 
 	block, ok := e.d.store.GetBlockByHash(blockHash, true)
 	if !ok {
-		fmt.Println("CCCC")
+		e.d.logger.Info(fmt.Sprintf("Block with hash %s not found", hash.String()))
 		// block not found
 		return nil, nil
 	}
 
 	receipts, err := e.d.store.GetReceiptsByHash(blockHash)
 	if err != nil {
-		fmt.Println("AAAA", err)
+		e.d.logger.Info(fmt.Sprintf("No receipts found for block with hash %s. Error: %v", hash.String(), err))
 		// block receipts not found
 		return nil, nil
 	}
 	if len(receipts) == 0 {
-		// receitps not written yet on the db
-		fmt.Println("BBBB")
+		// receipts not written yet on the db
+		e.d.logger.Info(fmt.Sprintf("No receipts written for block with hash %s", hash.String()))
 		return nil, nil
 	}
 	// find the transaction in the body

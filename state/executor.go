@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/0xPolygon/minimal/staking"
 	"github.com/0xPolygon/minimal/state/runtime/system"
 	"github.com/0xPolygon/minimal/types"
 
@@ -82,7 +83,10 @@ func NewExecutor(config *chain.Params, s State) *Executor {
 	}
 }
 
-func (e *Executor) WriteGenesis(alloc map[types.Address]*chain.GenesisAccount) types.Hash {
+func (e *Executor) WriteGenesis(
+	alloc map[types.Address]*chain.GenesisAccount,
+	allocStake map[types.Address]*chain.GenesisStake,
+) types.Hash {
 	snap := e.state.NewSnapshot()
 	txn := NewTxn(e.state, snap)
 
@@ -91,11 +95,6 @@ func (e *Executor) WriteGenesis(alloc map[types.Address]*chain.GenesisAccount) t
 	for addr, account := range alloc {
 		if account.Balance != nil {
 			txn.AddBalance(addr, account.Balance)
-		}
-		if account.StakedBalance != nil {
-			txn.AddStakedBalance(addr, account.StakedBalance)
-
-			txn.AddBalance(stakingAddress, account.StakedBalance)
 		}
 		if account.Nonce != 0 {
 			txn.SetNonce(addr, account.Nonce)
@@ -106,6 +105,13 @@ func (e *Executor) WriteGenesis(alloc map[types.Address]*chain.GenesisAccount) t
 		for key, value := range account.Storage {
 			txn.SetState(addr, key, value)
 		}
+	}
+
+	hub := staking.GetStakingHub()
+	for addr, stake := range allocStake {
+		hub.IncreaseStake(addr, stake.StakedBalance)
+
+		txn.AddBalance(stakingAddress, stake.StakedBalance)
 	}
 
 	_, root := txn.Commit(false)
@@ -123,6 +129,74 @@ type BlockResult struct {
 	TotalGas uint64
 }
 
+// getStakingEventType is a helper method for getting the type of system event
+func getStakingEventType(toAddress types.Address) staking.StakingEventType {
+	if toAddress == types.StringToAddress(system.StakingAddress) {
+		return staking.StakingEvent
+	}
+
+	return staking.UnstakingEvent
+}
+
+// constructPendingEvent is a helper method for constructing a pending event
+func constructPendingEvent(
+	toAddress types.Address,
+	fromAddress types.Address,
+	value *big.Int,
+) staking.PendingEvent {
+	eventType := getStakingEventType(toAddress)
+
+	return staking.PendingEvent{
+		Address:   fromAddress,
+		Value:     value,
+		EventType: eventType,
+	}
+}
+
+// cleanDiscardedEvents is a helper method for clearing discarded pending events
+func cleanDiscardedEvents(transactions []*types.Transaction) {
+	for _, discardedTxn := range transactions {
+		// Remove a pending event for the discarded transaction
+		if system.IsSystemEvent(discardedTxn.To) {
+			pendingEvent := constructPendingEvent(
+				*discardedTxn.To,
+				discardedTxn.From,
+				discardedTxn.Value,
+			)
+
+			hub := staking.GetStakingHub()
+			if hub.ContainsPendingEvent(pendingEvent) {
+				// Remove the event from the queue
+				hub.RemovePendingEvent(pendingEvent)
+			}
+		}
+	}
+}
+
+// commitApprovedEvents is a helper method for committing pending events that passed all checks
+func commitApprovedEvents(transactions []*types.Transaction) {
+	for _, t := range transactions {
+		// Check if the transaction matches a staking / unstaking event
+		if system.IsSystemEvent(t.To) {
+			pendingEvent := constructPendingEvent(*t.To, t.From, t.Value)
+
+			hub := staking.GetStakingHub()
+
+			if hub.ContainsPendingEvent(pendingEvent) {
+				// Remove the event from the queue
+				hub.RemovePendingEvent(pendingEvent)
+
+				// Execute the changes on the staking map
+				if pendingEvent.EventType == staking.StakingEvent {
+					hub.IncreaseStake(t.From, t.Value)
+				} else {
+					hub.ResetStake(t.From)
+				}
+			}
+		}
+	}
+}
+
 // ProcessBlock already does all the handling of the whole process, TODO
 func (e *Executor) ProcessBlock(parentRoot types.Hash, block *types.Block, blockCreator types.Address) (*BlockResult, error) {
 	txn, err := e.BeginTxn(parentRoot, block.Header, blockCreator)
@@ -133,10 +207,18 @@ func (e *Executor) ProcessBlock(parentRoot types.Hash, block *types.Block, block
 	txn.block = block
 	for _, t := range block.Transactions {
 		if err := txn.Write(t); err != nil {
+			// Because block processing termination is here,
+			// the executor needs to handle any "stale" pending events,
+			// since every transaction in this block is discarded
+			cleanDiscardedEvents(block.Transactions)
+
 			return nil, err
 		}
 	}
 	_, root := txn.Commit()
+
+	// Checks are passed, do staking logic if possible
+	commitApprovedEvents(block.Transactions)
 
 	res := &BlockResult{
 		Root:     root,
@@ -677,15 +759,18 @@ func (t *Transition) SubBalance(addr types.Address, balance *big.Int) {
 }
 
 func (t *Transition) GetStakedBalance(addr types.Address) *big.Int {
-	return t.state.GetStakedBalance(addr)
+	hub := staking.GetStakingHub()
+	return hub.GetStakedBalance(addr)
 }
 
 func (t *Transition) AddStakedBalance(addr types.Address, balance *big.Int) {
-	t.state.AddStakedBalance(addr, balance)
+	hub := staking.GetStakingHub()
+	hub.IncreaseStake(addr, balance)
 }
 
 func (t *Transition) SubStakedBalance(addr types.Address, balance *big.Int) {
-	t.state.SubStakedBalance(addr, balance)
+	hub := staking.GetStakingHub()
+	hub.DecreaseStake(addr, balance)
 }
 
 func (t *Transition) GetStorage(addr types.Address, key types.Hash) types.Hash {

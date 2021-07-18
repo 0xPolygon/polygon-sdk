@@ -1,5 +1,6 @@
 peers.json
 genesis.json
+staking-map.json
 *-packr.go
 config*.json
 

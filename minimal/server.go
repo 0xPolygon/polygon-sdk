@@ -15,6 +15,7 @@ import (
 	"github.com/0xPolygon/minimal/jsonrpc"
 	"github.com/0xPolygon/minimal/minimal/proto"
 	"github.com/0xPolygon/minimal/network"
+	"github.com/0xPolygon/minimal/staking"
 	"github.com/0xPolygon/minimal/state"
 	"github.com/0xPolygon/minimal/state/runtime/system"
 	"github.com/0xPolygon/minimal/txpool"
@@ -78,6 +79,11 @@ func NewServer(logger hclog.Logger, config *Config) (*Server, error) {
 
 	m.logger.Info("Data dir", "path", config.DataDir)
 
+	// Spin up the staking hub if the consensus engine is ibft-pos
+	if config.Chain.Params.GetEngine() == chain.IBFTEngine {
+		staking.GetStakingHub().SetLogger(logger)
+		staking.GetStakingHub().SetWorkingDirectory(config.DataDir)
+	}
 	// Generate all the paths in the dataDir
 	if err := SetupDataDir(config.DataDir, dirPaths); err != nil {
 		return nil, fmt.Errorf("failed to create data directories: %v", err)
@@ -106,6 +112,7 @@ func NewServer(logger hclog.Logger, config *Config) (*Server, error) {
 	m.state = st
 
 	m.executor = state.NewExecutor(config.Chain.Params, st)
+
 	// Add the system runtime
 	m.executor.SetRuntime(system.NewSystem())
 
@@ -116,7 +123,10 @@ func NewServer(logger hclog.Logger, config *Config) (*Server, error) {
 	m.executor.SetRuntime(evm.NewEVM())
 
 	// compute the genesis root state
-	genesisRoot := m.executor.WriteGenesis(config.Chain.Genesis.Alloc)
+	genesisRoot := m.executor.WriteGenesis(
+		config.Chain.Genesis.Alloc,
+		config.Chain.Genesis.AllocStake,
+	)
 	config.Chain.Genesis.StateRoot = genesisRoot
 
 	// blockchain object
@@ -212,7 +222,17 @@ func (s *Server) setupConsensus() error {
 		Config: engineConfig,
 		Path:   filepath.Join(s.config.DataDir, "consensus"),
 	}
-	consensus, err := engine(context.Background(), s.config.Seal, config, s.txpool, s.network, s.blockchain, s.executor, s.grpcServer, s.logger.Named("consensus"))
+	consensus, err := engine(
+		context.Background(),
+		s.config.Seal,
+		config,
+		s.txpool,
+		s.network,
+		s.blockchain,
+		s.executor,
+		s.grpcServer,
+		s.logger.Named("consensus"),
+	)
 	if err != nil {
 		return err
 	}
@@ -376,6 +396,9 @@ func (s *Server) Close() {
 	if err := s.consensus.Close(); err != nil {
 		s.logger.Error("failed to close consensus", "err", err.Error())
 	}
+
+	// Close the staking hub if present
+	staking.GetStakingHub().CloseStakingHub()
 }
 
 // Entry is a backend configuration entry

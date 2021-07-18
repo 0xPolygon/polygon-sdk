@@ -40,6 +40,15 @@ func (d *DevCommand) DefineFlags() {
 		FlagOptional:      true,
 	}
 
+	d.FlagMap["prestake"] = helper.FlagDescriptor{
+		Description: fmt.Sprintf("Sets the prestaked account balances. Default prestaked balance: %s", helper.DefaultPrestakeBalance),
+		Arguments: []string{
+			"ADDRESS:VALUE",
+		},
+		ArgumentsOptional: false,
+		FlagOptional:      true,
+	}
+
 	d.FlagMap["dev-interval"] = helper.FlagDescriptor{
 		Description: "Sets the client's dev notification interval. Default: 0",
 		Arguments: []string{

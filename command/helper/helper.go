@@ -273,6 +273,33 @@ func FillPremineMap(
 	return nil
 }
 
+// FillPrestakeMap fills the premine map for the genesis.json file with passed in account staked balances
+func FillPrestakeMap(
+	prestakeMap map[types.Address]*chain.GenesisStake,
+	prestake helperFlags.ArrayFlags,
+) error {
+	for _, prem := range prestake {
+		var addr types.Address
+		val := DefaultPrestakeBalance
+		if indx := strings.Index(prem, ":"); indx != -1 {
+			// <addr>:<balance>
+			addr, val = types.StringToAddress(prem[:indx]), prem[indx+1:]
+		} else {
+			// <addr>
+			addr = types.StringToAddress(prem)
+		}
+
+		amount, err := types.ParseUint256orHex(&val)
+		if err != nil {
+			return fmt.Errorf("failed to parse amount %s: %v", val, err)
+		}
+
+		prestakeMap[addr] = &chain.GenesisStake{StakedBalance: amount}
+	}
+
+	return nil
+}
+
 // WriteGenesisToDisk writes the passed in configuration to a genesis.json file at the specified path
 func WriteGenesisToDisk(chain *chain.Chain, genesisPath string) error {
 	data, err := json.MarshalIndent(chain, "", "    ")
@@ -287,7 +314,7 @@ func WriteGenesisToDisk(chain *chain.Chain, genesisPath string) error {
 }
 
 // generateDevGenesis generates a base dev genesis file with premined balances
-func generateDevGenesis(chainName string, premine helperFlags.ArrayFlags) error {
+func generateDevGenesis(chainName string, premine helperFlags.ArrayFlags, prestake helperFlags.ArrayFlags) error {
 	genesisPath := filepath.Join(".", GenesisFileName)
 
 	generateError := VerifyGenesisExistence(genesisPath)
@@ -309,6 +336,7 @@ func generateDevGenesis(chainName string, premine helperFlags.ArrayFlags) error 
 			GasLimit:   5000,
 			Difficulty: 1,
 			Alloc:      map[types.Address]*chain.GenesisAccount{},
+			AllocStake: map[types.Address]*chain.GenesisStake{},
 			ExtraData:  []byte{},
 		},
 		Params: &chain.Params{
@@ -322,6 +350,10 @@ func generateDevGenesis(chainName string, premine helperFlags.ArrayFlags) error 
 	}
 
 	if err := FillPremineMap(cc.Genesis.Alloc, premine); err != nil {
+		return err
+	}
+
+	if err := FillPrestakeMap(cc.Genesis.AllocStake, prestake); err != nil {
 		return err
 	}
 
@@ -346,9 +378,11 @@ func BootstrapDevCommand(baseCommand string, args []string) (*Config, error) {
 	flags.Usage = func() {}
 
 	var premine helperFlags.ArrayFlags
+	var prestake helperFlags.ArrayFlags
 
 	flags.StringVar(&cliConfig.LogLevel, "log-level", DefaultConfig().LogLevel, "")
 	flags.Var(&premine, "premine", "")
+	flags.Var(&prestake, "prestake", "")
 	flags.Uint64Var(&cliConfig.DevInterval, "dev-interval", 0, "")
 
 	if err := flags.Parse(args); err != nil {
@@ -359,7 +393,7 @@ func BootstrapDevCommand(baseCommand string, args []string) (*Config, error) {
 		return nil, err
 	}
 
-	if err := generateDevGenesis(config.Chain, premine); err != nil {
+	if err := generateDevGenesis(config.Chain, premine, prestake); err != nil {
 		return nil, err
 	}
 

@@ -35,9 +35,6 @@ type Account struct {
 	Root     types.Hash
 	CodeHash []byte
 	Trie     accountTrie
-
-	// System contract expansion //
-	StakedBalance *big.Int
 }
 
 func (a *Account) MarshalWith(ar *fastrlp.Arena) *fastrlp.Value {
@@ -46,7 +43,6 @@ func (a *Account) MarshalWith(ar *fastrlp.Arena) *fastrlp.Value {
 	v.Set(ar.NewBigInt(a.Balance))
 	v.Set(ar.NewBytes(a.Root.Bytes()))
 	v.Set(ar.NewBytes(a.CodeHash))
-	v.Set(ar.NewBigInt(a.StakedBalance))
 	return v
 }
 
@@ -65,7 +61,7 @@ func (a *Account) UnmarshalRlp(b []byte) error {
 		return err
 	}
 
-	if len(elems) != 5 {
+	if len(elems) != 4 {
 		return fmt.Errorf("account has an invalid field count")
 	}
 
@@ -76,9 +72,6 @@ func (a *Account) UnmarshalRlp(b []byte) error {
 	// balance
 	if a.Balance == nil {
 		a.Balance = new(big.Int)
-	}
-	if a.StakedBalance == nil {
-		a.StakedBalance = new(big.Int)
 	}
 
 	if err = elems[1].GetBigInt(a.Balance); err != nil {
@@ -93,14 +86,11 @@ func (a *Account) UnmarshalRlp(b []byte) error {
 		return err
 	}
 
-	// Staking implementation
-	err = elems[4].GetBigInt(a.StakedBalance)
-
-	return err
+	return nil
 }
 
 func (a *Account) String() string {
-	return fmt.Sprintf("%d %s %s", a.Nonce, a.Balance.String(), a.StakedBalance.String())
+	return fmt.Sprintf("%d %s", a.Nonce, a.Balance.String())
 }
 
 func (a *Account) Copy() *Account {
@@ -111,7 +101,6 @@ func (a *Account) Copy() *Account {
 	aa.CodeHash = a.CodeHash
 	aa.Root = a.Root
 	aa.Trie = a.Trie
-	aa.StakedBalance = big.NewInt(1).SetBytes(a.StakedBalance.Bytes())
 
 	return aa
 }
@@ -131,7 +120,6 @@ type StateObject struct {
 func (s *StateObject) Empty() bool {
 	return s.Account.Nonce == 0 &&
 		s.Account.Balance.Sign() == 0 &&
-		s.Account.StakedBalance.Sign() == 0 &&
 		bytes.Equal(s.Account.CodeHash, emptyCodeHash)
 }
 
@@ -180,13 +168,12 @@ func (s *StateObject) Copy() *StateObject {
 
 // Object is the serialization of the radix object (can be merged to StateObject?).
 type Object struct {
-	Address       types.Address
-	CodeHash      types.Hash
-	Balance       *big.Int
-	StakedBalance *big.Int
-	Root          types.Hash
-	Nonce         uint64
-	Deleted       bool
+	Address  types.Address
+	CodeHash types.Hash
+	Balance  *big.Int
+	Root     types.Hash
+	Nonce    uint64
+	Deleted  bool
 
 	// TODO: Move this to executor
 	DirtyCode bool

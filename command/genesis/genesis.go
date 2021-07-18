@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -215,6 +214,7 @@ func (c *GenesisCommand) Run(args []string) int {
 			GasLimit:   5000,
 			Difficulty: 1,
 			Alloc:      map[types.Address]*chain.GenesisAccount{},
+			AllocStake: map[types.Address]*chain.GenesisStake{},
 			ExtraData:  extraData,
 		},
 		Params: &chain.Params{
@@ -232,35 +232,9 @@ func (c *GenesisCommand) Run(args []string) int {
 		return 1
 	}
 
-	for _, pres := range prestake {
-		var addr types.Address
-		val := helper.DefaultPrestakeBalance
-		if indx := strings.Index(pres, ":"); indx != -1 {
-			// <addr>:<balance>
-			addr, val = types.StringToAddress(pres[:indx]), pres[indx+1:]
-		} else {
-			// <addr>
-			addr = types.StringToAddress(pres)
-		}
-
-		stakeAmount, err := types.ParseUint256orHex(&val)
-		if err != nil {
-			c.UI.Error(fmt.Sprintf("failed to parse stake amount %s: %v", val, err))
-			return 1
-		}
-
-		previousAccount := cc.Genesis.Alloc[addr]
-
-		if previousAccount != nil {
-			// Account already has a premined balance
-			previousAccount.StakedBalance = stakeAmount
-		} else {
-			// Account doesn't have a premined balance
-			cc.Genesis.Alloc[addr] = &chain.GenesisAccount{
-				Balance:       big.NewInt(0),
-				StakedBalance: stakeAmount,
-			}
-		}
+	if err = helper.FillPrestakeMap(cc.Genesis.AllocStake, prestake); err != nil {
+		c.UI.Error(err.Error())
+		return 1
 	}
 
 	if err = helper.WriteGenesisToDisk(cc, genesisPath); err != nil {

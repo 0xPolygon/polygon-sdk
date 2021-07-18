@@ -43,7 +43,7 @@ func TestIbft_Transfer(t *testing.T) {
 		receipt, err := srv.SendRawTx(ctx, txn, senderKey)
 
 		assert.NoError(t, err)
-		assert.NotNil(t, receipt)
+		assert.NotNilf(t, receipt, "Receipt is nil")
 		assert.NotNil(t, receipt.TransactionHash)
 	}
 }
