@@ -56,8 +56,14 @@ type TxPool struct {
 	proto.UnimplementedTxnPoolOperatorServer
 }
 
-// NewTxPool creates a new pool of transactios
-func NewTxPool(logger hclog.Logger, sealing bool, store store, grpcServer *grpc.Server, network *network.Server) (*TxPool, error) {
+// NewTxPool creates a new pool for transactions
+func NewTxPool(
+	logger hclog.Logger,
+	sealing bool,
+	store store,
+	grpcServer *grpc.Server,
+	network *network.Server,
+) (*TxPool, error) {
 	txPool := &TxPool{
 		logger:     logger.Named("txpool"),
 		store:      store,
@@ -485,7 +491,8 @@ func (t txPriceHeapImpl) Less(i, j int) bool {
 	if t[i].from == t[j].from {
 		return t[i].tx.Nonce < t[j].tx.Nonce
 	}
-	return t[i].price.Cmp((t[j].price)) < 0
+
+	return t[i].price.Cmp(t[j].price) >= 0
 }
 
 func (t txPriceHeapImpl) Swap(i, j int) {

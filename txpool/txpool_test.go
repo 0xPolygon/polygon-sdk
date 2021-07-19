@@ -3,6 +3,7 @@ package txpool
 import (
 	"fmt"
 	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/0xPolygon/minimal/crypto"
@@ -120,4 +121,101 @@ func TestTxnQueue_Promotion(t *testing.T) {
 	nonce, _ = pool.GetNonce(addr1)
 	assert.Equal(t, nonce, uint64(2))
 	assert.Equal(t, pool.Length(), uint64(2))
+}
+
+func TestTxnQueue_Heap(t *testing.T) {
+	type TestCase struct {
+		From     types.Address
+		GasPrice *big.Int
+		Nonce    uint64
+		Index    int
+	}
+
+	addr1 := types.Address{0x1}
+	addr2 := types.Address{0x2}
+
+	test := func(t *testing.T, testTable []TestCase) {
+		pool, err := NewTxPool(hclog.NewNullLogger(), false, &mockStore{}, nil, nil)
+		assert.NoError(t, err)
+		pool.EnableDev()
+
+		for _, testCase := range testTable {
+			err := pool.addImpl("", &types.Transaction{
+				From:     testCase.From,
+				GasPrice: testCase.GasPrice,
+				Nonce:    testCase.Nonce,
+			})
+			assert.NoError(t, err)
+		}
+
+		for _, testCase := range testTable {
+			transaction, _ := pool.Pop()
+
+			assert.NotNil(t, transaction)
+
+			actual := TestCase{
+				From:     transaction.From,
+				GasPrice: transaction.GasPrice,
+				Nonce:    transaction.Nonce,
+			}
+
+			assert.EqualValues(t, testCase, actual)
+		}
+
+		empty, _ := pool.Pop()
+		assert.Nil(t, empty)
+	}
+
+	t.Run("the higher priced transaction should be popped first", func(t *testing.T) {
+		test(t, []TestCase{
+			{
+				From:     addr1,
+				GasPrice: big.NewInt(2),
+			},
+			{
+				From:     addr2,
+				GasPrice: big.NewInt(1),
+			},
+		})
+
+	})
+
+	t.Run("sort by nonce when same from address", func(t *testing.T) {
+		test(t, []TestCase{
+			{
+				From:     addr1,
+				GasPrice: big.NewInt(2),
+				Nonce:    0,
+			},
+			{
+				From:     addr1,
+				GasPrice: big.NewInt(1),
+				Nonce:    1,
+			},
+		})
+	})
+
+	t.Run("make sure that heap is not functioning as a FIFO", func(t *testing.T) {
+		pool, err := NewTxPool(hclog.NewNullLogger(), false, &mockStore{}, nil, nil)
+		assert.NoError(t, err)
+		pool.EnableDev()
+
+		numTxns := 5
+		txns := make([]*types.Transaction, numTxns)
+
+		for i := 0; i < numTxns; i++ {
+			txns[i] = &types.Transaction{
+				From:     types.StringToAddress(strconv.Itoa(i + 1)),
+				GasPrice: big.NewInt(int64(i + 1)),
+			}
+
+			addErr := pool.addImpl("", txns[i])
+			assert.Nilf(t, addErr, "Unable to add transaction to pool")
+		}
+
+		for i := numTxns - 1; i >= 0; i-- {
+			txn, _ := pool.Pop()
+			assert.Equalf(t, txns[i].GasPrice, txn.GasPrice, "Expected output mismatch")
+		}
+	})
 }
